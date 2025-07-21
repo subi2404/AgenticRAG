@@ -1,0 +1,129 @@
+🔄 End-to-End Workflow: AgenticRAG Auto Upload System
+⚙️ 1. System Initialization
+Backend (FastAPI):
+✅ Initializes FastAPI() app.
+
+✅ Loads SentenceTransformer (all-MiniLM-L6-v2) for text embeddings.
+
+✅ Connects to persistent ChromaDB at ./vector_db/chroma_db.
+
+✅ Prepares document_log.json to track upload history.
+
+Frontend (Streamlit):
+✅ Sets page config, initializes session_state for modals and tables.
+
+✅ Defines backend URL and path to the shared log file.
+
+🔍 2. Backend Status Check
+📍 Frontend calls GET /status on the backend.
+
+📡 Backend returns:
+
+Total number of vectors stored
+
+ChromaDB path
+
+✅ Status is shown in UI as "Backend is running" with stats.
+
+📤 3. Document Upload by User
+👤 User selects one or more files (PDF, DOCX, TXT, CSV, or ZIP) via Streamlit file_uploader.
+
+🔁 4. Pre-Upload Checks
+❌ If file already exists in document_log.json, skip upload.
+
+✅ Else, proceed to backend.
+
+🔌 5. File Sent to Backend
+📦 Frontend sends POST /upload with the file using requests.
+
+🧠 6. Backend Processing (FastAPI)
+🗂️ File is saved temporarily in /tmp.
+
+📝 File is parsed:
+
+parse_pdf(), parse_docx(), or read() for txt/csv.
+
+🪓 Text is split into paragraphs (split_into_paragraphs()).
+
+🔍 Each paragraph is embedded into a 384-dim vector using SentenceTransformer.
+
+📥 Vectors, texts, and metadata are stored in ChromaDB.
+
+📚 document_log.json is updated with:
+
+Filename
+
+Number of chunks stored
+
+Upload timestamp
+
+📤 Backend sends back:
+
+Chunk count
+
+Embedding dimensions
+
+Sample embedding vector
+
+First few text chunks
+
+📊 7. Frontend Displays Upload Results
+✅ Shows success message.
+
+📎 Displays:
+
+Total chunks stored
+
+Embedding dimension
+
+First 5 dimensions of a sample embedding
+
+First 3 paragraphs of text
+
+📊 Adds this to table_data for further visualizations.
+
+📈 8. User Triggers Visualizations (Optional)
+Based on buttons clicked:
+
+Button	What It Shows
+📈 Bar Graph	Chunks per document
+🔥 Heatmap	Cosine similarity between chunks
+🧠 Keyword Chart	Top 10 frequent words
+🌐 PCA	2D view of embeddings using PCA
+All graphs are generated using matplotlib, seaborn, and sklearn.
+
+🧾 9. Document Upload History Panel
+📜 Reads document_log.json
+
+📂 Lists:
+
+Filename
+
+Chunk count
+
+Upload time
+
+❌ Delete button
+
+🗑️ 10. Document Deletion (If Clicked)
+🔁 Frontend sends DELETE /delete-document?filename=...
+
+🧹 Backend:
+
+Deletes matching vectors from ChromaDB
+
+Removes entry from document_log.json
+
+🔄 Frontend calls st.rerun() to refresh UI
+
+✅ FINAL OUTCOME
+User can:
+
+Upload and index documents into a vector DB
+
+Visualize embeddings and text
+
+View full upload history
+
+Delete specific documents and their vectors
+
