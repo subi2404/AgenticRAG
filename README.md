@@ -1,19 +1,19 @@
 # AgenticRAG
 
-backend :
+backend :<br />
 pip install fastapi <br />
-pip install uvicorn
-pip install sentence-transformers
-pip install chromadb
-pip install PyPDF2
-pip install python-docx
-pip install python-multipart
-
+pip install uvicorn <br />
+pip install sentence-transformers <br />
+pip install chromadb <br />
+pip install PyPDF2 <br />
+pip install python-docx <br />
+pip install python-multipart <br />
+<br />
 frontend :
-pip install streamlit
-pip install pandas
-pip install matplotlib
-pip install seaborn
-pip install scikit-learn
-pip install numpy
+pip install streamlit <br />
+pip install pandas <br />
+pip install matplotlib <br />
+pip install seaborn <br />
+pip install scikit-learn <br />
+pip install numpy <br />
 requests
