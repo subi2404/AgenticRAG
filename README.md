@@ -1,7 +1,7 @@
 # AgenticRAG
 
 backend :
-pip install fastapi
+pip install fastapi <br />
 pip install uvicorn
 pip install sentence-transformers
 pip install chromadb
