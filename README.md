@@ -1,6 +1,6 @@
 # AgenticRAG
 
-backend
+backend :
 pip install fastapi
 pip install uvicorn
 pip install sentence-transformers
@@ -9,7 +9,7 @@ pip install PyPDF2
 pip install python-docx
 pip install python-multipart
 
-frontend
+frontend :
 pip install streamlit
 pip install pandas
 pip install matplotlib
