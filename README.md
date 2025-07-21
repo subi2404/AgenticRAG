@@ -90,7 +90,7 @@ This FastAPI-based backend service handles document uploads, processes them usin
     "Recent advancements include transformers and large language models."
   ]
 }
-
+```
 # 📄 Document Processing and Vector Storage Service
 
 ## 🔄 Example Flow
@@ -104,6 +104,7 @@ This FastAPI-based backend service handles document uploads, processes them usin
   {
     "filename": "report.pdf"
   }
+  ```
 - Log entry
   ```json
 {
@@ -111,3 +112,4 @@ This FastAPI-based backend service handles document uploads, processes them usin
   "chunks_stored": 20,
   "upload_time": "2025-07-21T10:25:00"
 }
+```
