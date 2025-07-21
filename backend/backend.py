@@ -3,19 +3,23 @@ import uuid
 import tempfile
 import datetime
 import json
+import re
+from collections import Counter
+
 from fastapi import FastAPI, UploadFile, HTTPException
 from fastapi.responses import JSONResponse
 from sentence_transformers import SentenceTransformer
 from PyPDF2 import PdfReader
 from docx import Document
+
 import chromadb
+from chromadb import PersistentClient
 from chromadb.config import Settings
 
 # Initialize FastAPI
 app = FastAPI()
 
 # ---------- GLOBAL PERSISTENT STORAGE PATHS --------------
-
 DB_BASE_DIR = os.path.abspath("./vector_db")
 CHROMA_DB_DIR = os.path.join(DB_BASE_DIR, "chroma_db")
 LOG_FILE_PATH = os.path.join(DB_BASE_DIR, "document_log.json")
@@ -25,20 +29,13 @@ os.makedirs(DB_BASE_DIR, exist_ok=True)
 os.makedirs(CHROMA_DB_DIR, exist_ok=True)
 
 # ---------- Initialize Persistent ChromaDB ---------------
-
-from chromadb import PersistentClient
-
 client = PersistentClient(path=CHROMA_DB_DIR)
 collection = client.get_or_create_collection("documents")
 
-
 # ---------- Load Embedding Model -------------------------
-
 model = SentenceTransformer("all-MiniLM-L6-v2")
 
-
-# ------------------- MODULES ----------------------
-
+# ------------------- PARSERS ----------------------
 def parse_pdf(file_path):
     reader = PdfReader(file_path)
     return "\n\n".join([page.extract_text() or '' for page in reader.pages])
@@ -69,8 +66,7 @@ def log_upload(filename, chunks_count):
     with open(LOG_FILE_PATH, "w") as f:
         json.dump(log_data, f, indent=4)
 
-
-# ------------------- ENDPOINTS ----------------------
+# ------------------- ROUTES ----------------------
 
 @app.post("/upload")
 async def upload(file: UploadFile):
@@ -117,7 +113,8 @@ async def upload(file: UploadFile):
             "chunks_stored": len(paragraphs),
             "embedding_dimension": len(embeddings[0]),
             "embedding_sample": embeddings[0][:5],
-            "preview_chunks": paragraphs[:3]
+            "preview_chunks": paragraphs[:3],
+            "embedding_preview": embeddings[:5]
         }, 200)
 
     except Exception as e:
@@ -130,18 +127,17 @@ def status():
     return {
         "total_vectors_stored": count,
         "database_path": CHROMA_DB_DIR
-        
     }
+
+
 @app.delete("/delete-document")
 async def delete_document(filename: str):
     try:
-        # Fetch only vector IDs linked to filename
         results = collection.get(where={"filename": filename})
 
         if results and results["ids"]:
             collection.delete(ids=results["ids"])
 
-        # Efficient JSON log file update
         if os.path.exists(LOG_FILE_PATH):
             with open(LOG_FILE_PATH, "r") as f:
                 log_data = json.load(f)
@@ -157,3 +153,19 @@ async def delete_document(filename: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/keyword-frequency")
+def keyword_frequency(filename: str):
+    if not os.path.exists(LOG_FILE_PATH):
+        raise HTTPException(status_code=404, detail="Log file not found")
+
+    results = collection.get(where={"filename": filename})
+    chunks = results.get("documents", [])
+
+    if not chunks:
+        raise HTTPException(status_code=404, detail="No chunks found for this file")
+
+    all_text = " ".join(chunks).lower()
+    tokens = re.findall(r'\b[a-zA-Z]{3,}\b', all_text)
+    keyword_freq = dict(Counter(tokens).most_common(20))
+
+    return {"keywords": keyword_freq}
