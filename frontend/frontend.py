@@ -58,8 +58,8 @@ st.divider()
 # ----------- UPLOAD SECTION ----------- #
 st.header("📤 Upload Documents")
 upload = st.file_uploader(
-    "Upload documents (PDF, DOCX, TXT, CSV):",
-    type=["pdf", "docx", "txt", "csv"],
+    "Upload documents (PDF, DOCX, TXT, CSV, or ZIP):",
+    type=["pdf", "docx", "txt", "csv", "zip"],
     accept_multiple_files=True
 )
 
