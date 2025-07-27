@@ -4,6 +4,7 @@ import tempfile
 import datetime
 import json
 import re
+import zipfile
 from collections import Counter
 
 from fastapi import FastAPI, UploadFile, HTTPException
@@ -12,9 +13,7 @@ from sentence_transformers import SentenceTransformer
 from PyPDF2 import PdfReader
 from docx import Document
 
-import chromadb
 from chromadb import PersistentClient
-from chromadb.config import Settings
 
 # Initialize FastAPI
 app = FastAPI()
@@ -66,60 +65,80 @@ def log_upload(filename, chunks_count):
     with open(LOG_FILE_PATH, "w") as f:
         json.dump(log_data, f, indent=4)
 
+# ------------------- FILE HANDLER ----------------------
+
+def process_file(file_path, filename):
+    ext = filename.split(".")[-1].lower()
+
+    if ext == "pdf":
+        text = parse_pdf(file_path)
+    elif ext == "docx":
+        text = parse_docx(file_path)
+    elif ext in ["txt", "csv"]:
+        text = parse_txt_csv(file_path)
+    else:
+        return None, f"Unsupported file type: {filename}"
+
+    paragraphs = split_into_paragraphs(text)
+    if not paragraphs:
+        return None, f"No readable text found in {filename}"
+
+    embeddings = model.encode(paragraphs).tolist()
+    collection.add(
+        ids=[str(uuid.uuid4()) for _ in paragraphs],
+        embeddings=embeddings,
+        documents=paragraphs,
+        metadatas=[{"filename": filename}] * len(paragraphs)
+    )
+
+    log_upload(filename, len(paragraphs))
+
+    return {
+        "filename": filename,
+        "chunks_stored": len(paragraphs),
+        "embedding_dimension": len(embeddings[0]),
+        "embedding_sample": embeddings[0][:5],
+        "preview_chunks": paragraphs[:3]
+    }, None
+
 # ------------------- ROUTES ----------------------
 
 @app.post("/upload")
 async def upload(file: UploadFile):
     try:
         ext = file.filename.split(".")[-1].lower()
-        temp_dir = tempfile.gettempdir()
+        temp_dir = tempfile.mkdtemp()
         temp_path = os.path.join(temp_dir, file.filename)
 
         with open(temp_path, "wb") as f:
             f.write(await file.read())
 
-        # Parse File
-        if ext == "pdf":
-            text = parse_pdf(temp_path)
-        elif ext == "docx":
-            text = parse_docx(temp_path)
-        elif ext in ["txt", "csv"]:
-            text = parse_txt_csv(temp_path)
+        results = []
+
+        if ext == "zip":
+            with zipfile.ZipFile(temp_path, "r") as zip_ref:
+                zip_ref.extractall(temp_dir)
+
+            for root, _, files in os.walk(temp_dir):
+                for fname in files:
+                    full_path = os.path.join(root, fname)
+                    result, error = process_file(full_path, fname)
+                    if error:
+                        continue  # Skip unsupported files
+                    results.append(result)
+
+            if not results:
+                raise HTTPException(status_code=422, detail="No valid documents found in ZIP.")
+            return JSONResponse({"status": "success", "documents_processed": results})
+
         else:
-            raise HTTPException(status_code=415, detail="Unsupported file type.")
-
-        # Chunk by Paragraph
-        paragraphs = split_into_paragraphs(text)
-        if not paragraphs:
-            raise HTTPException(status_code=422, detail="No readable text found in document.")
-
-        # Generate Embeddings
-        embeddings = model.encode(paragraphs).tolist()
-
-        # Store in ChromaDB
-        collection.add(
-            ids=[str(uuid.uuid4()) for _ in paragraphs],
-            embeddings=embeddings,
-            documents=paragraphs,
-            metadatas=[{"filename": file.filename}] * len(paragraphs)
-        )
-
-        os.remove(temp_path)
-        log_upload(file.filename, len(paragraphs))
-
-        return JSONResponse({
-            "status": "success",
-            "filename": file.filename,
-            "chunks_stored": len(paragraphs),
-            "embedding_dimension": len(embeddings[0]),
-            "embedding_sample": embeddings[0][:5],
-            "preview_chunks": paragraphs[:3],
-            "embedding_preview": embeddings[:5]
-        }, 200)
+            result, error = process_file(temp_path, file.filename)
+            if error:
+                raise HTTPException(status_code=415, detail=error)
+            return JSONResponse({"status": "success", **result})
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @app.get("/status")
 def status():
@@ -129,21 +148,17 @@ def status():
         "database_path": CHROMA_DB_DIR
     }
 
-
 @app.delete("/delete-document")
 async def delete_document(filename: str):
     try:
         results = collection.get(where={"filename": filename})
-
         if results and results["ids"]:
             collection.delete(ids=results["ids"])
 
         if os.path.exists(LOG_FILE_PATH):
             with open(LOG_FILE_PATH, "r") as f:
                 log_data = json.load(f)
-
             log_data = [entry for entry in log_data if entry["filename"] != filename]
-
             with open(LOG_FILE_PATH, "w") as f:
                 json.dump(log_data, f, indent=4)
 
@@ -151,7 +166,6 @@ async def delete_document(filename: str):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @app.get("/keyword-frequency")
 def keyword_frequency(filename: str):
